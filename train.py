@@ -16,8 +16,15 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import precision_score, recall_score, f1_score
 import joblib
 import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 
 
 def load_and_prepare(path='data.csv'):
@@ -105,10 +112,24 @@ def train_and_evaluate(X, y, save_path='rf_pipeline.joblib'):
     r2 = r2_score(y_test, y_pred)
 
     print(f"Resultados del modelo Random Forest:\n- MAE: {mae:.3f}\n- RMSE: {rmse:.3f}\n- R2: {r2:.3f}")
-
     # Guardar pipeline completo
     joblib.dump(pipeline, save_path)
     print(f"Pipeline guardado en: {os.path.abspath(save_path)}")
+
+    # Métricas de clasificación (binarizando la variable objetivo)
+    try:
+        # Umbrales: mediana del entrenamiento y 30 grados como ejemplo
+        thresholds = {'median': float(np.median(y_train)), '30C': 30.0}
+        print('\nMétricas de clasificación (binarizando por umbral):')
+        for name, thr in thresholds.items():
+            y_test_bin = (y_test >= thr).astype(int)
+            y_pred_bin = (y_pred >= thr).astype(int)
+            prec = precision_score(y_test_bin, y_pred_bin, zero_division=0)
+            rec = recall_score(y_test_bin, y_pred_bin, zero_division=0)
+            f1 = f1_score(y_test_bin, y_pred_bin, zero_division=0)
+            print(f" - Umbral {name} ({thr}): Precision={prec:.3f}, Recall={rec:.3f}, F1={f1:.3f}")
+    except Exception as e:
+        print(f"No se pudieron calcular métricas de clasificación: {e}")
 
     # Intentar mostrar importancias de features si es posible
     try:
@@ -152,6 +173,40 @@ def train_and_evaluate(X, y, save_path='rf_pipeline.joblib'):
     print('\nEjemplo: predicciones sobre 5 muestras de test (valor_real -> predicción)')
     for real, p in zip(y_test.head(5).values, preds):
         print(f" - {real} -> {p:.2f}")
+
+    # Asegurar que las métricas y resultados aparecen por terminal
+    print('\nLas métricas anteriores se imprimen en la salida estándar (terminal).')
+
+    # Generar y guardar un gráfico de clusters (KMeans) usando PCA para 3D
+    try:
+        # Usar el preprocesador para transformar X_train
+        X_for_clusters = X_train.copy()
+        X_proc = preprocessor.transform(X_for_clusters)
+
+        # Reducir a 3 componentes para graficar
+        pca = PCA(n_components=3, random_state=42)
+        pcs = pca.fit_transform(X_proc)
+
+        # Aplicar KMeans
+        kmeans = KMeans(n_clusters=4, random_state=42)
+        clusters = kmeans.fit_predict(pcs)
+
+        # Plot 3D
+        fig = plt.figure(figsize=(10, 7))
+        ax = fig.add_subplot(111, projection='3d')
+        sc = ax.scatter(pcs[:, 0], pcs[:, 1], pcs[:, 2], c=clusters, cmap='tab10', s=40, alpha=0.8)
+        ax.set_title('Clusters KMeans sobre componentes PCA')
+        ax.set_xlabel('PC1')
+        ax.set_ylabel('PC2')
+        ax.set_zlabel('PC3')
+        # Guardar figura
+        plt.tight_layout()
+        plot_path = 'clusters_plot.png'
+        fig.savefig(plot_path, dpi=150)
+        plt.close(fig)
+        print(f"Gráfico de clusters guardado en: {os.path.abspath(plot_path)}")
+    except Exception as e:
+        print(f"No se pudo generar el gráfico de clusters: {e}")
 
     return pipeline
 
