@@ -1,97 +1,158 @@
-#librerias 
+"""train.py
 
-import pandas as pd 
+Script para entrenar un modelo Random Forest que predice la temperatura máxima
+(`maxtemp`) usando `data.csv`.
+
+Uso: python train.py
+Genera: `rf_pipeline.joblib` (pipeline preprocesador+modelo) y métricas impresas.
+"""
+
+import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import datetime as dt
-import scipy.stats
-import statsmodels.formula.api as sm
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from mpl_toolkits.mplot3d import Axes3D 
-
-#datasets 
-#dataset1=csv_egresos.csv= data1.csv 
-cat_dataset = pd.read_csv('data1.csv', sep =';', encoding='latin1')
-#dataset2=Delitos_CSV.csv = data2.csv 
-cat_MINPUB = pd.read_csv('data2.csv', sep =';', encoding='latin1')
-df_del =pd.read_csv('data2.csv', sep =';')
-#dataset3=Egresos_gendarmeria.csv= data3.csv
-df_egr = pd.read_csv('data3.csv', sep =';', encoding='latin1')
-df_fin = pd.merge(df_del, df_egr, on ='COD_DELITO')
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import joblib
+import os
 
 
-df_fin.columns
-df_fin.info()
-df_fin2 = df_fin
-df_final = df_fin2.drop_duplicates()
+def load_and_prepare(path='data.csv'):
+    df = pd.read_csv(path, index_col=0)
 
-df_final["COD_PERS"].value_counts()
-df_final.groupby(['MES_EGRESO', 'COD_PERS','Codigo', 'COD_DELITO'])['SCORE'].sum()
-df_fin2.isnull().sum()
-df_fin2.nunique()
-df_fin2['COD_DELITO'].unique()
-df_fin2['MES_EGRESO'].unique()
+    # Parsear fecha (formato dd.mm.YYYY en el CSV)
+    df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, format='%d.%m.%Y', errors='coerce')
 
-df_fin2['MES_EGRESO'].value_counts()
-df_fin2['MES_EGRESO'] = df_fin2['MES_EGRESO'].astype(str)
-df_fin2.groupby(['MES_EGRESO'])['SCORE'].sum()
+    # Crear features temporales
+    df['day'] = df['Date'].dt.day
+    df['month'] = df['Date'].dt.month
+    df['year'] = df['Date'].dt.year
+    df['dayofweek'] = df['Date'].dt.dayofweek
+    df['dayofyear'] = df['Date'].dt.dayofyear
 
-score = df_fin2.groupby(['MES_EGRESO','COD_PERS']).agg({'SCORE': lambda x: x.sum()})
-score.reset_index(inplace=True)
+    # Crear un lag de la temperatura máxima (maxtemp) para usar como feature adicional
+    df = df.sort_values('Date')
+    df['maxtemp_lag1'] = df['maxtemp'].shift(1)
 
-col =['COD_PERS', 'MES_EGRESO', 'SCORE', 'COD_DELITO','Codigo']
-rfm = df_fin2[col]
+    # Elegir target y features
+    target = 'maxtemp'
 
-rfm['MES_EGRESO'] = pd.to_datetime(rfm['MES_EGRESO'],errors ='coerce')
-rfm['MES_EGRESO'].max()
-f_corte = dt.datetime(2022,7,1)
-rfm = rfm.drop_duplicates()
-RFM1 = rfm.groupby('COD_PERS').agg({'MES_EGRESO': lambda x: (f_corte - x.max()).days})
-RFM1['Frecuencia'] = (rfm.groupby(by=['COD_PERS'])['Codigo'].count()).astype(float)
-RFM1['ScoreTotal'] = rfm.groupby(by=['COD_PERS']).agg({'SCORE': 'sum'})
+    # Columnas numéricas que usaremos (incluye lag)
+    numeric_features = ['mintemp', 'pressure', 'humidity', 'mean wind speed', 'maxtemp_lag1',
+                        'day', 'month', 'dayofweek', 'dayofyear']
 
-RFM1.rename(columns={'MES_EGRESO': 'Egreso más reciente'}, inplace=True)
+    # Columnas categóricas
+    categorical_features = ['weather', 'cloud']
 
-RFM1[RFM1['Egreso más reciente'] == 0]
-RFM1[RFM1['Frecuencia'] == 0]
-RFM1[RFM1['ScoreTotal'] == 0]
-RFM1 = RFM1[RFM1['Egreso más reciente'] > 0]
-RFM1.reset_index(drop=True,inplace=True)
-RFM1 = RFM1[RFM1['Frecuencia'] > 0]
-RFM1.reset_index(drop=True,inplace=True)
-RFM1 = RFM1[RFM1['ScoreTotal'] > 0]
-RFM1.reset_index(drop=True,inplace=True)
+    # Mantener sólo filas sin target NA y sin lag NA
+    df = df.dropna(subset=[target])
+    df = df.dropna(subset=['maxtemp_lag1'])
 
-Data_RFM1 = RFM1[['Egreso más reciente','Frecuencia','ScoreTotal']]
+    X = df[numeric_features + categorical_features]
+    y = df[target]
 
-data_log = np.log(Data_RFM1)
-scaler = StandardScaler()
-scaler.fit(data_log)
-data_sc = scaler.transform(data_log)
-df_norm = pd.DataFrame(data_sc, columns=Data_RFM1.columns)
+    return X, y
 
 
-#plots 
-def plots_model():    
-    fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    for x in RFM1.grupos.unique():        
-        xs = RFM1[RFM1.grupos == x]['Egreso más reciente']
-        zs = RFM1[RFM1.grupos == x]['Frecuencia']
-        ys = RFM1[RFM1.grupos == x]['ScoreTotal']
-        ax.scatter(xs, ys, zs, s=50, alpha=0.6, edgecolors='w', label = x)
+def build_pipeline(n_estimators=100, random_state=42):
+    # Preprocesadores
+    numeric_features = ['mintemp', 'pressure', 'humidity', 'mean wind speed', 'maxtemp_lag1',
+                        'day', 'month', 'dayofweek', 'dayofyear']
+    categorical_features = ['weather', 'cloud']
 
-    plt.legend()
-    plt.title('Clusters del Modelo KMeans')
-    plt.savefig('clusters_plot.png')  # Guardar el gráfico como un archivo PNG
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore', sparse=False))
+    ])
+
+    preprocessor = ColumnTransformer(transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)
+    ])
+
+    rf = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state, n_jobs=-1)
+
+    pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('model', rf)])
+
+    return pipeline
 
 
-model = KMeans(n_clusters=4, init='k-means++', max_iter=301)
-grupos = model.fit_predict(df_norm)
-df_norm['grupos'] = grupos
-RFM1['grupos'] = grupos
-plots_model()
-plt.show()
+def train_and_evaluate(X, y, save_path='rf_pipeline.joblib'):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    pipeline = build_pipeline()
+    pipeline.fit(X_train, y_train)
+
+    y_pred = pipeline.predict(X_test)
+
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"Resultados del modelo Random Forest:\n- MAE: {mae:.3f}\n- RMSE: {rmse:.3f}\n- R2: {r2:.3f}")
+
+    # Guardar pipeline completo
+    joblib.dump(pipeline, save_path)
+    print(f"Pipeline guardado en: {os.path.abspath(save_path)}")
+
+    # Intentar mostrar importancias de features si es posible
+    try:
+        preprocessor = pipeline.named_steps['preprocessor']
+        model = pipeline.named_steps['model']
+
+        # Obtener nombres de features después del preprocesado (scikit-learn >=1.0 soporta get_feature_names_out)
+        try:
+            feature_names = preprocessor.get_feature_names_out()
+        except Exception:
+            # Fallback aproximado: combinar nombres numéricos y categóricos
+            num_feats = ['mintemp', 'pressure', 'humidity', 'mean wind speed', 'maxtemp_lag1', 'day', 'month', 'dayofweek', 'dayofyear']
+            # obtener categorías one-hot a partir del transformador
+            cat_feats = []
+            try:
+                ohe = preprocessor.named_transformers_['cat'].named_steps['onehot']
+                cats = ohe.categories_
+                cat_names = preprocessor.transformers_[1][2]
+                for name, cats_list in zip(cat_names, cats):
+                    for c in cats_list:
+                        cat_feats.append(f"{name}__{c}")
+            except Exception:
+                cat_feats = ['weather_?', 'cloud_?']
+
+            feature_names = np.array(num_feats + cat_feats)
+
+        importances = model.feature_importances_
+        # En caso de desajuste en longitudes, truncar o expandir
+        n = min(len(importances), len(feature_names))
+        print('\nTop features por importancia:')
+        idx = np.argsort(importances)[-n:][::-1]
+        for i in idx[:20]:
+            name = feature_names[i] if i < len(feature_names) else f'feature_{i}'
+            print(f" - {name}: {importances[i]:.4f}")
+    except Exception as e:
+        print(f"No se pudieron mostrar importancias de forma detallada: {e}")
+
+    # Mostrar unas predicciones de ejemplo
+    sample = X_test.head(5).copy()
+    preds = pipeline.predict(sample)
+    print('\nEjemplo: predicciones sobre 5 muestras de test (valor_real -> predicción)')
+    for real, p in zip(y_test.head(5).values, preds):
+        print(f" - {real} -> {p:.2f}")
+
+    return pipeline
+
+
+def main():
+    X, y = load_and_prepare('data.csv')
+    pipeline = train_and_evaluate(X, y, save_path='rf_pipeline.joblib')
+
+
+if __name__ == '__main__':
+    main()
