@@ -68,9 +68,15 @@ def build_pipeline(n_estimators=100, random_state=42):
         ('scaler', StandardScaler())
     ])
 
+    # OneHotEncoder API changed in recent scikit-learn versions: use 'sparse_output' when 'sparse' is unsupported
+    try:
+        ohe = OneHotEncoder(handle_unknown='ignore', sparse=False)
+    except TypeError:
+        ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
+
     categorical_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore', sparse=False))
+        ('onehot', ohe)
     ])
 
     preprocessor = ColumnTransformer(transformers=[
@@ -94,7 +100,8 @@ def train_and_evaluate(X, y, save_path='rf_pipeline.joblib'):
     y_pred = pipeline.predict(X_test)
 
     mae = mean_absolute_error(y_test, y_pred)
-    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    # algunos entornos de sklearn no aceptan el argumento 'squared'
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
 
     print(f"Resultados del modelo Random Forest:\n- MAE: {mae:.3f}\n- RMSE: {rmse:.3f}\n- R2: {r2:.3f}")
