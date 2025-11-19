@@ -107,11 +107,45 @@ def train_and_evaluate(X, y, save_path='rf_pipeline.joblib'):
     y_pred = pipeline.predict(X_test)
 
     mae = mean_absolute_error(y_test, y_pred)
-    # algunos entornos de sklearn no aceptan el argumento 'squared'
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    # En algunas versiones de scikit-learn no existe "squared" en mean_squared_error,
+    # así que calculamos RMSE a partir del MSE para máxima compatibilidad.
+    mse = mean_squared_error(y_test, y_pred)  # por defecto squared=True
+    rmse = np.sqrt(mse)
+
     r2 = r2_score(y_test, y_pred)
 
-    print(f"Resultados del modelo Random Forest:\n- MAE: {mae:.3f}\n- RMSE: {rmse:.3f}\n- R2: {r2:.3f}")
+    # Mostrar en los logs (GitHub Actions los muestra aquí)
+    print("===== Métricas Random Forest (maxtemp) =====")
+    print(f"MAE : {mae:.3f}")
+    print(f"RMSE: {rmse:.3f}")
+    print(f"R²  : {r2:.3f}")
+
+    # Guardar también en un archivo de texto
+    metrics_path = 'metrics.txt'
+    with open(metrics_path, "w", encoding='utf-8') as f:
+        f.write("Métricas Random Forest (maxtemp)\n")
+        f.write(f"MAE : {mae:.3f}\n")
+        f.write(f"RMSE: {rmse:.3f}\n")
+        f.write(f"R²  : {r2:.3f}\n")
+
+    # ====== GRÁFICO REAL vs PREDICTO ======
+    plot_path_real = 'real_vs_pred.png'
+    plt.figure(figsize=(6, 6))
+    plt.scatter(y_test, y_pred, alpha=0.5, label="Predicciones RF")
+    min_temp = min(y_test.min(), np.min(y_pred))
+    max_temp = max(y_test.max(), np.max(y_pred))
+    plt.plot([min_temp, max_temp], [min_temp, max_temp], "r--", label="Línea ideal")
+    plt.xlabel("Temperatura real (maxtemp)")
+    plt.ylabel("Temperatura predicha (maxtemp)")
+    plt.title("Random Forest: real vs predicho (maxtemp)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(plot_path_real, dpi=150)
+    plt.close()
+
+    print(f"Gráfico guardado en: {os.path.abspath(plot_path_real)}")
+    print(f"Métricas guardadas en: {os.path.abspath(metrics_path)}")
+
     # Guardar pipeline completo
     joblib.dump(pipeline, save_path)
     print(f"Pipeline guardado en: {os.path.abspath(save_path)}")
