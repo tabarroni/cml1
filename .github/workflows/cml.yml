@@ -1,4 +1,4 @@
-buenoname: Train and publish model
+name: Train and publish model
 
 on:
   push:
