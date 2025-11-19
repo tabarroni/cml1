@@ -1,0 +1,46 @@
+name: Train and publish model
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run training script
+        run: |
+          python train.py
+
+      - name: Run predictions
+        run: |
+          python predict.py --n 5 --output predictions.csv
+
+      - name: List generated files (for debug)
+        run: |
+          ls -la
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cml-artifacts
+          path: |
+            rf_pipeline.joblib
+            clusters_plot.png
+            predictions.csv
