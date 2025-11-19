@@ -37,6 +37,7 @@ jobs:
           ls -la
 
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cml-artifacts
@@ -44,3 +45,5 @@ jobs:
             rf_pipeline.joblib
             clusters_plot.png
             predictions.csv
+            metrics.txt
+            real_vs_pred.png
