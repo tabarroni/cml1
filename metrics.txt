@@ -1,0 +1,4 @@
+Métricas Random Forest (maxtemp)
+MAE : 1.589
+RMSE: 2.026
+R²  : 0.784
