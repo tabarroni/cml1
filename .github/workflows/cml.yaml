@@ -24,7 +24,7 @@ jobs:
       run: python train.py
       
     - name: Upload plot
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: clusters-plot
         path: clusters_plot.png
