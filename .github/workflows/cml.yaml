@@ -1,4 +1,4 @@
-name: CI for ML project
+name: CML Workflow for Temperature Prediction # Nombre más específico
 
 on: [push]
 
@@ -8,10 +8,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
-
+      uses: actions/checkout@v4 # Versión actualizada
+      
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5 # Versión actualizada
       with:
         python-version: '3.8'
     
@@ -20,11 +20,37 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    # 1. Ejecución del script de entrenamiento
     - name: Run training
       run: python train.py
       
-    - name: Upload plot
+# ------------------------------------------------------------------
+#  ✨ PASOS PARA REPORTAR PARÁMETROS Y MÉTRICAS (CML) ✨
+# ------------------------------------------------------------------
+
+    - name: Setup CML
+      uses: iterative/setup-cml@v1 # Instala la herramienta CML
+
+    - name: Publish Report and Metrics
+      env:
+        # Variable de entorno necesaria para que CML pueda comentar
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+      run: |
+        # 1. Sube el gráfico generado y añade su URL a report.md.
+        #    IMPORTANTE: Tu 'train.py' debe generar 'predictions_plot.png' y 'report.md'.
+        cml-publish predictions_plot.png --title "Gráfico de Predicciones" >> report.md
+        
+        # 2. Publica el contenido completo de report.md (parámetros, métricas, gráfico) 
+        #    como un comentario en el Commit o Pull Request de GitHub.
+        cml-send-comment report.md
+        
+# ------------------------------------------------------------------
+#  FIN DE PASOS DE REPORTE
+# ------------------------------------------------------------------
+
+    # 4. Sube el gráfico como artefacto (Opcional, pero recomendado)
+    - name: Upload Plot as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: clusters-plot
-        path: clusters_plot.png
+        name: predictions-plot # Nombre más descriptivo para el artefacto
+        path: predictions_plot.png # Nombre del archivo generado por tu train.py
