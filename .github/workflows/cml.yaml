@@ -1,6 +1,6 @@
-name: CML Workflow for Temperature Prediction # Nombre del flujo
+name: CML Workflow for Temperature Prediction
 
-on: [push] # Activación automática con cada 'git push'
+on: [push]
 
 jobs:
   build:
@@ -8,10 +8,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4 # Versión actualizada
-      
+      uses: actions/checkout@v4 
+
     - name: Set up Python
-      uses: actions/setup-python@v5 # Versión actualizada
+      uses: actions/setup-python@v5 
       with:
         python-version: '3.8'
     
@@ -20,34 +20,28 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 1. Ejecuta el script de entrenamiento, que genera 'report.md' y 'predictions_plot.png'
     - name: Run training and generate report
       run: python train.py
       
 # ------------------------------------------------------------------
-#  PASOS PARA REPORTAR MÉTRICAS Y PARÁMETROS (CML) 
+#  PASOS DE REPORTE CML (VERSION CORREGIDA)
 # ------------------------------------------------------------------
 
     - name: Setup CML
-      uses: iterative/setup-cml@v4 # Versión actualizada para evitar advertencias
+      uses: iterative/setup-cml@v2 # CAMBIAR A V2 O V1
 
     - name: Publish Report and Metrics
       env:
-        # Token necesario para que CML pueda comentar en el Pull Request o Commit
         REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
       run: |
-        # Añade el gráfico al reporte. CML lo sube y genera el enlace.
+        # 1. Publica el gráfico (asume que 'train.py' lo crea)
         cml-publish predictions_plot.png --title "Gráfico de Predicciones" >> report.md
 
-        # Publica el contenido completo de report.md (parámetros, métricas, gráfico) 
-        # como un comentario en el Commit que disparó la acción.
+        # 2. Publica el comentario (asume que 'train.py' crea 'report.md')
         cml-send-comment report.md
         
 # ------------------------------------------------------------------
-#  FIN DE PASOS DE REPORTE
-# ------------------------------------------------------------------
 
-    # Sube el gráfico como un artefacto de GitHub (opcional pero útil)
     - name: Upload Plot as Artifact
       uses: actions/upload-artifact@v4
       with:
