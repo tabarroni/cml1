@@ -1,6 +1,6 @@
-name: CML Workflow for Temperature Prediction # Nombre más específico
+name: CML Workflow for Temperature Prediction # Nombre del flujo
 
-on: [push]
+on: [push] # Activación automática con cada 'git push'
 
 jobs:
   build:
@@ -20,37 +20,36 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 1. Ejecución del script de entrenamiento
-    - name: Run training
+    # 1. Ejecuta el script de entrenamiento, que genera 'report.md' y 'predictions_plot.png'
+    - name: Run training and generate report
       run: python train.py
       
 # ------------------------------------------------------------------
-#  ✨ PASOS PARA REPORTAR PARÁMETROS Y MÉTRICAS (CML) ✨
+#  PASOS PARA REPORTAR MÉTRICAS Y PARÁMETROS (CML) 
 # ------------------------------------------------------------------
 
     - name: Setup CML
-      uses: iterative/setup-cml@v1 # Instala la herramienta CML
+      uses: iterative/setup-cml@v4 # Versión actualizada para evitar advertencias
 
     - name: Publish Report and Metrics
       env:
-        # Variable de entorno necesaria para que CML pueda comentar
+        # Token necesario para que CML pueda comentar en el Pull Request o Commit
         REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
       run: |
-        # 1. Sube el gráfico generado y añade su URL a report.md.
-        #    IMPORTANTE: Tu 'train.py' debe generar 'predictions_plot.png' y 'report.md'.
+        # Añade el gráfico al reporte. CML lo sube y genera el enlace.
         cml-publish predictions_plot.png --title "Gráfico de Predicciones" >> report.md
-        
-        # 2. Publica el contenido completo de report.md (parámetros, métricas, gráfico) 
-        #    como un comentario en el Commit o Pull Request de GitHub.
+
+        # Publica el contenido completo de report.md (parámetros, métricas, gráfico) 
+        # como un comentario en el Commit que disparó la acción.
         cml-send-comment report.md
         
 # ------------------------------------------------------------------
 #  FIN DE PASOS DE REPORTE
 # ------------------------------------------------------------------
 
-    # 4. Sube el gráfico como artefacto (Opcional, pero recomendado)
+    # Sube el gráfico como un artefacto de GitHub (opcional pero útil)
     - name: Upload Plot as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: predictions-plot # Nombre más descriptivo para el artefacto
-        path: predictions_plot.png # Nombre del archivo generado por tu train.py
+        name: predictions-plot 
+        path: predictions_plot.png
