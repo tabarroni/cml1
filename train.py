@@ -284,7 +284,6 @@ def main():
     X, y = load_and_prepare('data.csv')
     pipeline = train_and_evaluate(X, y, save_path='rf_pipeline.joblib')
 
-
 if __name__ == '__main__':
     main()
 
